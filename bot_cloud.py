@@ -6,30 +6,27 @@ from pymongo import MongoClient
 if getattr(sys, 'frozen', False):
     os.chdir(sys._MEIPASS)
 
-# --- CONFIGURATION (FILL THIS) ---
 TOKEN = ""
 MONGO_URI = ""
 CHANNEL_ID = 0
 USER_PIN = ""
 
-# --- DATABASE SETUP ---
 try:
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     db = client['cloud_vault']['data']
 except:
-    sys.exit("Database connection failed.")
+    sys.exit()
 
 def get_db():
     res = db.find_one({"_id": "main_db"})
     return res if res else {"_id": "main_db", "files": []}
 
-# --- SERVER SETUP ---
 app = Flask(__name__)
 app.secret_key = os.urandom(24).hex()
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-HTML_PRO = """
+HTML_UI = """
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -51,7 +48,7 @@ HTML_PRO = """
     <div class="sidebar">
         <h4 class="text-primary fw-bold mb-5"><i class="bi bi-cloud-check-fill"></i> CloudDrive</h4>
         <button class="btn-add w-100 shadow-sm" onclick="document.getElementById('fi').click()"><i class="bi bi-plus-lg me-2"></i> Upload</button>
-        <input type="file" id="fi" multiple style="display:none" onchange="gasUpload(this.files)">
+        <input type="file" id="fi" multiple style="display:none" onchange="gas(this.files)">
     </div>
     <div class="main">
         <div class="drive-card">
@@ -63,7 +60,7 @@ HTML_PRO = """
                     <tr class="file-list" onclick="preview('{{ idx }}', '{{ f.name }}')">
                         <td><i class="bi bi-file-earmark-play-fill text-danger fs-5 me-2"></i> {{ f.name }}</td>
                         <td><span class="badge bg-success">Stored</span></td>
-                        <td><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); hapus('{{ idx }}')"><i class="bi bi-trash"></i></button></td>
+                        <td><button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); del('{{ idx }}')"><i class="bi bi-trash"></i></button></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -71,8 +68,8 @@ HTML_PRO = """
         </div>
     </div>
     <div id="upBox">
-        <div class="small mb-2" id="upName">File Name</div>
-        <div class="progress" style="height: 6px;"><div id="upBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div></div>
+        <div class="small mb-2" id="upN">File Name</div>
+        <div class="progress" style="height: 6px;"><div id="upB" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div></div>
     </div>
     <div class="modal fade" id="vM" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-centered"><div class="modal-content bg-dark border-0">
         <div id="vB" class="modal-body p-0 d-flex justify-content-center align-items-center" style="min-height: 500px;"></div>
@@ -82,17 +79,17 @@ HTML_PRO = """
         </div>
     </div></div></div>
     <script>
-        async function gasUpload(files) {
+        async function gas(files) {
             document.getElementById('upBox').style.display = 'block';
             for(let f of files) {
-                document.getElementById('upName').innerText = f.name;
-                const chunk = 8 * 1024 * 1024; const total = Math.ceil(f.size/chunk); const fid = Date.now();
+                document.getElementById('upN').innerText = f.name;
+                const chunk = 5 * 1024 * 1024; const total = Math.ceil(f.size/chunk); const fid = Date.now();
                 for(let i=0; i<total; i++) {
                     const fd = new FormData();
                     fd.append('chunk', f.slice(i*chunk, (i+1)*chunk));
                     fd.append('name', f.name); fd.append('part', i+1); fd.append('total', total); fd.append('file_id', fid);
                     await fetch('/upload', {method:'POST', body:fd});
-                    document.getElementById('upBar').style.width = ((i+1)/total*100)+'%';
+                    document.getElementById('upB').style.width = ((i+1)/total*100)+'%';
                 }
             }
             location.reload();
@@ -106,7 +103,7 @@ HTML_PRO = """
             if(['mp4','webm','mov'].includes(ext)) document.getElementById('vB').innerHTML = `<video src="${d.url}" controls autoplay class="w-100"></video>`;
             else document.getElementById('vB').innerHTML = `<img src="${d.url}" class="img-fluid">`;
         }
-        async function hapus(id) { if(confirm('Delete file?')) { await fetch('/del/'+id); location.reload(); } }
+        async function del(id) { if(confirm('Delete?')) { await fetch('/del/'+id); location.reload(); } }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
@@ -117,8 +114,8 @@ up_tmp = {}
 
 @app.route('/')
 def home():
-    if not session.get('a'): return render_template_string('<body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#f0f2f5"><div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,0.1);text-align:center"><h3>Cloud Vault</h3><form action="/login" method="post"><input type="password" name="p" class="form-control mb-3" placeholder="Enter PIN" autofocus><button class="btn btn-primary w-100">Login</button></form></div></body>')
-    data = get_db(); return render_template_string(HTML_PRO, files=list(enumerate(data['files'])))
+    if not session.get('a'): return render_template_string('<body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#f0f2f5"><div style="background:white;padding:40px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,0.1);text-align:center"><h3>Cloud Vault</h3><form action="/login" method="post"><input type="password" name="p" class="form-control mb-3" placeholder="PIN" autofocus><button class="btn btn-primary w-100">Login</button></form></div></body>')
+    data = get_db(); return render_template_string(HTML_UI, files=list(enumerate(data['files'])))
 
 @app.route('/login', methods=['POST'])
 def login():
